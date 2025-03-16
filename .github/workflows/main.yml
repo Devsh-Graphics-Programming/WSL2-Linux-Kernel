@@ -1,0 +1,45 @@
+name: Build WSL2 Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential flex bison dwarves libssl-dev libelf-dev cpio qemu-utils zstd xz-utils
+
+      - name: Build Kernel
+        run: |
+          cp Microsoft/config-wsl .config
+          make -j$(nproc) mod2yesconfig
+          make -j$(nproc) KCONFIG_CONFIG=.config
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsl2-kernel-artifacts
+          path: |
+            arch/x86/boot/bzImage
+            .config
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: wsl2-kernel-${{ github.run_id }}
+          name: WSL2 Kernel Build
+          draft: false
+          prerelease: false
+          files: |
+            arch/x86/boot/bzImage
+            .config
