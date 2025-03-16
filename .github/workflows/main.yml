@@ -1,0 +1,51 @@
+name: Build WSL2 Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential flex bison dwarves libssl-dev libelf-dev cpio qemu-utils zstd xz-utils
+
+      - name: Build Kernel
+        run: |
+          make -j$(nproc) KCONFIG_CONFIG=Microsoft/config-wsl
+          make INSTALL_MOD_PATH="$PWD/modules" modules_install
+
+      - name: Validate Kernel Build Output
+        run: |
+          find "$PWD" -maxdepth 1 -type f -name vmlinux | head -n1
+
+      - name: Compress Kernel with zstd and xz
+        run: |
+          tar --zstd -cf vmlinux.tar.zst vmlinux
+          tar -Jcf vmlinux.tar.xz vmlinux
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsl2-kernel-artifacts
+          path: |
+            vmlinux.tar.zst
+            vmlinux.tar.xz
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: wsl2-kernel-${{ github.run_id }}
+          name: WSL2 Kernel Build
+          draft: false
+          prerelease: false
+          files: |
+            vmlinux.tar.zst
+            vmlinux.tar.xz
